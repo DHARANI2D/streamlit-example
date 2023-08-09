@@ -1,38 +1,82 @@
-from collections import namedtuple
-import altair as alt
-import math
-import pandas as pd
 import streamlit as st
 
-"""
-# Welcome to Streamlit!
+grade_points = {
+    "O": 10.0,
+    "A+": 9.0,
+    "A": 8.0,
+    "B+": 7.0,
+    "B": 6.0,
+    "C": 5.0,
+}
 
-Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:
+def calculate_adjusted_grade(difficulty, target_cgpa):
+    if difficulty == "Difficult":
+        return grade_points["C"]
+    elif difficulty == "Moderate" and target_cgpa is not None:
+        return target_cgpa * 0.75
+    else:
+        return grade_points["A"]
 
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
+def main():
+    st.title("CGPA Calculator")
 
-In the meantime, below is an example of what you can do with just a few lines of code:
-"""
+    current_cgpa = st.number_input("Current CGPA:", min_value=0.0, max_value=9.9, step=0.1)
+    target_cgpa = st.number_input("Target CGPA:", min_value=8.0, max_value=9.9, step=0.1)
+
+    num_subjects = st.number_input("Number of Subjects:", min_value=1, value=1, step=1)
+
+    subject_data = []
+    for i in range(num_subjects):
+        st.markdown(f"Subject {i + 1}")
+        subject_name = st.text_input(f"Subject {i + 1} Name:")
+        credits = st.number_input(f"Credits for {subject_name}:", key=f"credits_{i}", min_value=1.0, step=0.5)
+        difficulty = st.selectbox(
+            f"Difficulty Level for {subject_name}:",
+            ["Easy", "Moderate", "Difficult"],
+            key=f"difficulty_{i}"
+        )
+
+        adjusted_grade = calculate_adjusted_grade(difficulty, target_cgpa)
+        rounded_grade_key = max(grade_points, key=lambda key: grade_points[key] <= adjusted_grade)
+        subject_data.append((subject_name, credits, rounded_grade_key))
 
 
-with st.echo(code_location='below'):
-    total_points = st.slider("Number of points in spiral", 1, 5000, 2000)
-    num_turns = st.slider("Number of turns in spiral", 1, 100, 9)
+    if st.button("Calculate"):
+        st.write("Estimated Grades for Each Subject:")
+        for subject_name, credits, grade_key in subject_data:
+            st.write(f"{subject_name}: {grade_key} (Credits: {credits})")
 
-    Point = namedtuple('Point', 'x y')
-    data = []
+        total_credits = sum(credits for _, credits, _ in subject_data)
+        weighted_sum = sum(credits * grade_points[grade_key] for _, credits, grade_key in subject_data)
+        new_cgpa = (weighted_sum + (current_cgpa * total_credits)) / (total_credits + credits)
 
-    points_per_turn = total_points / num_turns
+        if new_cgpa > target_cgpa:
+            cgpa_decrease = new_cgpa - target_cgpa
+            st.warning(f"Estimated CGPA exceeds Target CGPA by {cgpa_decrease:.2f}. Adjusting grades...")
 
-    for curr_point_num in range(total_points):
-        curr_turn, i = divmod(curr_point_num, points_per_turn)
-        angle = (curr_turn + 1) * 2 * math.pi * i / points_per_turn
-        radius = curr_point_num / total_points
-        x = radius * math.cos(angle)
-        y = radius * math.sin(angle)
-        data.append(Point(x, y))
+            st.write("Adjusted Grades:")
+            for i in range(num_subjects):
+                subject_data[i] = (subject_data[i][0], subject_data[i][1], "C")
 
-    st.altair_chart(alt.Chart(pd.DataFrame(data), height=500, width=500)
-        .mark_circle(color='#0068c9', opacity=0.5)
-        .encode(x='x:Q', y='y:Q'))
+            for subject_name, credits, grade_key in subject_data:
+                st.write(f"{subject_name}: {grade_key} (Credits: {credits})")
+
+            new_cgpa = target_cgpa
+
+        if new_cgpa < 5.0:
+            st.warning("Estimated CGPA went below 5.0. Adjusting grades and target CGPA...")
+            reduction_factor = (5.0 - current_cgpa * total_credits) / credits
+            for i in range(num_subjects):
+                subject_data[i] = (subject_data[i][0], subject_data[i][1], calculate_adjusted_grade(subject_data[i][2], target_cgpa))
+            target_cgpa = 5.0
+            new_cgpa = 5.0
+
+        st.success(f"Estimated CGPA: {new_cgpa:.2f}")
+
+        if new_cgpa < target_cgpa:
+            st.info("Your capabilities are low estimated,So your Modified Target CGPA: {target_cgpa:.2f}")
+    
+    st.write("<p style='text-align: center;'>Crafted with fervor by 2D🤓</p>", unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()
